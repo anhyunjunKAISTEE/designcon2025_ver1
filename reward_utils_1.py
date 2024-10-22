@@ -96,7 +96,7 @@ def TSV_Z_parameter(via_array, freq=np.arange(1e8, 4e10+1e8, step=1e8) ):
 
 
     # C Calculation
-    C = u_0 * e_si * e_0 * h_tsv ** 2 * np.linalg.inv(Leff)
+    C = u_0 * e_si * e_0 * h_tsv ** 2 * np.linalg.pinv(Leff, rcond=1e-10)
     C_insulator = 1 / 2 * (2 * math.pi * e_0 * e_ox * (h_tsv - h_IMD) / math.log((d_tsv / 2 + t_ox) / (d_tsv / 2)))
     # print("Cs",C_insulator)
     Ceff = np.zeros(C.shape)
@@ -177,9 +177,7 @@ def TSV_Z_parameter(via_array, freq=np.arange(1e8, 4e10+1e8, step=1e8) ):
 
 
 
-
-
-        Impedance_D_inv = np.linalg.pinv(Impedance_D)
+        Impedance_D_inv = np.linalg.pinv(Impedance_D, rcond=1e-10)
 
         Z_parameter.append(Impedance_A - np.dot(np.dot(Impedance_B, Impedance_D_inv), Impedance_C))
 
@@ -206,7 +204,7 @@ def Z2S(Z_parameter,source,load):
 
         Zd0 = np.diag([1/math.sqrt(source), 1/math.sqrt(load)] * (len(Z_parameter[0]) // 2))
 
-        ZZ_inv = np.linalg.pinv( np.matmul(np.matmul(Zd0,Z_parameter[freq_i]),Zd0) + np.identity(dim))
+        ZZ_inv = np.linalg.pinv( np.matmul(np.matmul(Zd0,Z_parameter[freq_i]),Zd0) + np.identity(dim), rcond=1e-10)
 
         S_p = np.dot((np.matmul(np.matmul(Zd0,Z_parameter[freq_i]),Zd0) - np.identity(dim)), ZZ_inv)
         S_parameter.append(S_p)
@@ -222,7 +220,7 @@ def Z2S(Z_parameter,source,load):
 
 def S2Z(S_parameter,source,load):
     Zd0 = np.diag([math.sqrt(source),math.sqrt(load)]*(S_parameter.shape[1]//2))
-    Z_parameter = np.matmul(np.matmul(Zd0,np.matmul(np.eye(S_parameter.shape[1])+S_parameter,np.linalg.pinv(np.eye(S_parameter.shape[1])-S_parameter))),Zd0)
+    Z_parameter = np.matmul(np.matmul(Zd0,np.matmul(np.eye(S_parameter.shape[1])+S_parameter,np.linalg.pinv(np.eye(S_parameter.shape[1])-S_parameter))),Zd0, rcond=1e-10)
     return Z_parameter
 
 def S2T(S_parameter,inputs,outputs):
@@ -237,7 +235,7 @@ def S2T(S_parameter,inputs,outputs):
     S12 = S_[:, 0:S_.shape[1] // 2 , S_.shape[2] // 2:]
     S22 = S_[:, S_.shape[1] // 2:, S_.shape[2] // 2:]
 
-    inv_S21 = np.linalg.pinv(S21)
+    inv_S21 = np.linalg.pinv(S21, rcond=1e-10)
     T_parameter = np.zeros([S_.shape[0], S_.shape[1], S_.shape[2]],dtype=complex)
     T_parameter[:, 0:S_.shape[1] // 2, 0:S_.shape[2] // 2 ] = S12 - np.matmul(np.matmul(S11, inv_S21), S22)
     T_parameter[:,S_.shape[1] // 2:, 0:S_.shape[2] // 2 ] = - 1 * np.matmul(inv_S21, S22)
@@ -254,7 +252,7 @@ def T2S(T_parameter,inputs,outputs):
     T12 = T_parameter[:, 0:T_parameter.shape[1] // 2, T_parameter.shape[2] // 2:]
     T22 = T_parameter[:, T_parameter.shape[1] // 2:, T_parameter.shape[2] // 2:]
 
-    inv_T22 = np.linalg.pinv(T22)
+    inv_T22 = np.linalg.pinv(T22, rcond=1e-10)
 
     S_parameter = np.zeros([T_parameter.shape[0], T_parameter.shape[1], T_parameter.shape[2]],dtype=complex)
 
