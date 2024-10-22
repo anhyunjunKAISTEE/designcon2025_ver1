@@ -168,7 +168,7 @@ if __name__ == "__main__":
 
     array_data_dir = 'data/via_arrays_config'
     # target_files = [ "4_4_2_3_arrays.npy", "4_4_2_4_arrays.npy"]
-    target_files = [ "4_4_8_500_arrays.npy", 
+    target_files = [ #"4_4_8_500_arrays.npy", 
                     "5_5_12_500_arrays.npy",
                     "4_6_12_500_arrays.npy",
                     "6_6_18_500_arrays.npy", 
@@ -206,6 +206,8 @@ if __name__ == "__main__":
             # 각 array에 대해 reward 계산
             start = time.time()
             for i, via_array in enumerate(via_arrays):
+                if (i<30):
+                    continue
                 r, reward_list = reward(via_array, V_op=1.0, f_op=f_op*1e9, n_stack=16, fast=False , fast_img_save=False, size=2, scaling=False)
                 reward_arrays.append(reward_list)
             
@@ -217,6 +219,8 @@ if __name__ == "__main__":
             # reward_arrays를 numpy 파일로 저장
             reward_file_name = f"{file_unique_name}"+f"_{f_op}"+"_rewards.npy"
             reward_file_path = os.path.join(reward_data_save_dir, reward_file_name)
-            print(reward_arrays)
+            # print(reward_arrays)
             np.save(reward_file_path, reward_arrays)
             print(f"Saved rewards to {reward_file_path}")
+
+    
