@@ -206,8 +206,6 @@ if __name__ == "__main__":
             # 각 array에 대해 reward 계산
             start = time.time()
             for i, via_array in enumerate(via_arrays):
-                if (i<30):
-                    continue
                 r, reward_list = reward(via_array, V_op=1.0, f_op=f_op*1e9, n_stack=16, fast=False , fast_img_save=False, size=2, scaling=False)
                 reward_arrays.append(reward_list)
             
