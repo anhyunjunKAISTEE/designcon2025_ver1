@@ -6,9 +6,9 @@
 ## utils_reward2.py -> treat via_config -> boosting reward calculation time 
 
 import matplotlib
-matplotlib.use('Agg', force=True)  # GUI가 필요없는 백엔드 사용
+# matplotlib.use('Agg', force=True)  # GUI가 필요없는 백엔드 사용
 import matplotlib.pyplot as plt
-
+import sys
 import os
 import numpy as np
 import math
@@ -19,12 +19,16 @@ import math
 from scipy.signal import savgol_filter
 from scipy.interpolate import interp1d
 from reward_utils_1_gpu import *
-from reward_utils_2 import *
+from reward_utils_2_gpu import *
+
+# from reward_utils_1 import *
+# from reward_utils_2 import *
+
 from datetime import datetime
 import glob
 
 def via_slow_reward(via_array, V_op=0.4, f_op=2e9, n_stack=16):
-    
+
     ## parameter information
     V_op = V_op
     f_op = f_op
@@ -34,22 +38,14 @@ def via_slow_reward(via_array, V_op=0.4, f_op=2e9, n_stack=16):
     sig_n = len(np.where(np.array(via_array) == 3)[0])  # sig 개수 
     input_ports = list(range(0, sig_n * 2, 2))          # [ 0, 2, 4] (전체개수=sig 개수)
     output_ports = list(range(1, sig_n * 2 + 1, 2))     # [ 1, 3, 5] (전체개수=sig 개수)
-    freq=torch.arange(1e8, 4e10+1e8, step=1e8)     # 0.1G ~ 40GHz까지 400 step
-
-    #######################
-    ## Device to GPU ##
-    # freq = freq.to(device)
+    freq = np.arange(1e8, 4e10+1e8, step=1e8)     # 0.1G ~ 40GHz까지 400 step
 
     ###################################
-    # (A) make Transfer Function (~S-para)
+
         # (1) unit TSV
-
     Z_tsv = TSV_Z_parameter(via_array, freq)      # (6*6*400) len=400, 개당 size=6*6 . 즉, 6*6이 400개 (why 6=2*signal개수)
-    # print(Z_tsv)
-
     S_tsv = Z2S(Z_tsv, 50, 50)                    # (6*6*400)
     T_tsv = S2T(S_tsv, input_ports, output_ports) # (6*6*400)
-
         # (2) + cap
     Z_cap = Cap_Zparameter(0.2e-12, sig_n, freq)  # (6*6*400)
     S_cap = Z2S(Z_cap, 50, 50)                    # (6*6*400)
@@ -60,8 +56,8 @@ def via_slow_reward(via_array, V_op=0.4, f_op=2e9, n_stack=16):
         # (4) cascading n stacks
     T_cascade = make_via_channel(n_stack, T_tsv, T_cap, T_termination) # (6*6*400)
     S_cascade = T2S(T_cascade, input_ports, output_ports)              # (6*6*400)
-    
-    # quit()
+
+
     ###################################
     # (B) SBR calculation 
     rewards = []
@@ -174,15 +170,16 @@ if __name__ == "__main__":
     ## User setting ##
     f_ops_Ghz = [ 2.0, 3.0]
     array_data_dir = 'data/via_arrays_config'
-    target_files = ["4_4_8_500_arrays.npy", 
-                    "5_5_12_500_arrays.npy",
-                    "4_6_12_500_arrays.npy",
-                    "6_6_18_500_arrays.npy", 
-                    "6_8_24_500_arrays.npy",
-                    "8_8_32_500_arrays.npy",
-                    "8_10_40_500_arrays.npy",
-                    "10_10_50_500_arrays.npy",
-                     ]
+    target_files = [ "4_4_8_20_arrays.npy"]
+    # target_files = ["4_4_8_500_arrays.npy", 
+    #                 "5_5_12_500_arrays.npy",
+    #                 "4_6_12_500_arrays.npy",
+    #                 "6_6_18_500_arrays.npy", 
+    #                 "6_8_24_500_arrays.npy",
+    #                 "8_8_32_500_arrays.npy",
+    #                 "8_10_40_500_arrays.npy",
+    #                 "10_10_50_500_arrays.npy",
+    #                  ]
     #########################################################################################################
 
     # for each frequency step
@@ -234,6 +231,12 @@ if __name__ == "__main__":
 
             # reward calculation
             for i, via_array in enumerate(via_arrays):
+                #
+                r, reward_list = reward(via_array, V_op=1.0, f_op=f_op*1e9, n_stack=16, fast=False, fast_img_save=False, size=2, scaling=False)
+                print(reward_list)
+                print("time consumption during this cycle: ", time.time()-start)
+                quit()
+
                 # print(reward_arrays)
                 if i < start_index:
                     continue
@@ -245,12 +248,12 @@ if __name__ == "__main__":
                         print(f"Error at iteration {i} for {file_unique_name}: {str(e)}")
                         reward_arrays.append(reward_list_like)  # -1이 원소로 가득한 리스트 추가
                     
-                    # quit()
                     # 100개 단위로 진행상황 출력
                     if (i + 1) % 1 == 0:
                         progress = (i + 1) / total_arrays * 100
                         print(f"{file_unique_name}: Processed {i + 1}/{total_arrays} arrays ({progress:.1f}%)")
                         print("time consumption during this cycle: ", time.time()-start)
+                    
                     
                     # txt 파일에 reward_arrays를 저장
                     reward_file_txt_name = f"{file_unique_name}"+f"_{f_op}_"+current_time+"_rewards.txt"
@@ -260,14 +263,13 @@ if __name__ == "__main__":
                             f.write(str(reward_instance) + '\n')
                     # print(f"Saved rewards to {reward_file_txt_path}")
                 
-            
+                
             # reward_arrays를 numpy 파일로 저장
             reward_file_name = f"{file_unique_name}"+f"_{f_op}_"+current_time+"_rewards.npy"
             reward_file_path = os.path.join(reward_data_save_dir, reward_file_name)
 
             np.save(reward_file_path, reward_arrays)
             print(f"Saved rewards to {reward_file_path}")
-            
 
 
 
