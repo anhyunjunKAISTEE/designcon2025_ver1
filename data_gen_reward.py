@@ -249,7 +249,7 @@ if __name__ == "__main__":
                     with open(reward_file_txt_path, 'w') as f:
                         for reward_instance in reward_arrays:
                             f.write(str(reward_instance) + '\n')
-                    print(f"Saved rewards to {reward_file_txt_path}")
+                    # print(f"Saved rewards to {reward_file_txt_path}")
                 
                 
             # reward_arrays를 numpy 파일로 저장
