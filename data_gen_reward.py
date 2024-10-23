@@ -20,8 +20,8 @@ from scipy.signal import savgol_filter
 from scipy.interpolate import interp1d
 from reward_utils_1 import *
 from reward_utils_2 import *
-
-
+from datetime import datetime
+import glob
 
 def via_slow_reward(via_array, V_op=0.4, f_op=2e9, n_stack=16):
     
@@ -161,14 +161,12 @@ def reward(via_array, V_op=0.4, f_op=2e9, n_stack=16, fast=False , fast_img_save
 
 
 if __name__ == "__main__":
-
-    ###################################
+    current_time = datetime.now().strftime('%m%d%H%M')
+    #########################################################################################################
     ## User setting ##
     f_ops_Ghz = [ 2.0, 3.0]
-
     array_data_dir = 'data/via_arrays_config'
-    # target_files = [ "4_4_2_3_arrays.npy", "4_4_2_4_arrays.npy"]
-    target_files = [ #"4_4_8_500_arrays.npy", 
+    target_files = ["4_4_8_500_arrays.npy", 
                     "5_5_12_500_arrays.npy",
                     "4_6_12_500_arrays.npy",
                     "6_6_18_500_arrays.npy", 
@@ -177,48 +175,90 @@ if __name__ == "__main__":
                     "8_10_40_500_arrays.npy",
                     "10_10_50_500_arrays.npy",
                      ]
-    
+    #########################################################################################################
+
+    # for each frequency step
     for f_op in f_ops_Ghz:
-        # 저장할 디렉토리 생성 (없는 경우)
+
+        # if directory does not exist, create it
         reward_data_save_dir = 'data/via_arrays_reward'
         if not os.path.exists(reward_data_save_dir):
             os.makedirs(reward_data_save_dir)
             print(f"Created directory: {reward_data_save_dir}")
 
+        # for each file in the target_files
         for file_name in target_files:
 
+            # if directory does not exist, create it
             file_path = os.path.join(array_data_dir, file_name)
             if not os.path.exists(file_path):
                 print(f"Warning: File {file_name} does not exist. Skipping...")
                 continue
+            # file name processing
             file_unique_name = file_name.replace('_arrays.npy', '')
-            # print(f"\nProcessing {file_unique_name}...")
-            
-            # array data load
+            n_sig = int(file_unique_name.split('_')[2])
             via_arrays = np.load(file_path, allow_pickle=True)
-            
-            # continue
-
-            # reward 계산 및 저장
             reward_arrays = []
+            reward_list_like = [-1 for sigals in range(n_sig)]
             total_arrays = len(via_arrays)
-            
-            # 각 array에 대해 reward 계산
             start = time.time()
+
+            ###################################################################################
+            # for already existing files, find the latest one and resume from there
+            existing_files = glob.glob(os.path.join(reward_data_save_dir, f"{file_unique_name}_{f_op}_*_rewards.txt"))
+            print(f"Found {len(existing_files)} existing files for {file_unique_name} at {f_op} GHz")
+            start_index = 0
+            if existing_files:
+                latest_file = max(existing_files)
+                print(f"Found existing file: {latest_file}" + f"among existing files: {existing_files}")
+                with open(latest_file, 'r') as f:
+                    start_index = len(f.readlines())
+                print(f"Resuming from index {start_index}")
+
+            # mod: 기존 데이터 로드 (있는 경우)
+            if start_index > 0:
+                with open(latest_file, 'r') as f:
+                    for line in f:
+                        reward_arrays.append(eval(line.strip()))  # 문자열을 리스트로 변환
+                print(f"Loaded {len(reward_arrays)} existing results")
+                
+            ##################################################################################
+
+            # reward calculation
             for i, via_array in enumerate(via_arrays):
-                r, reward_list = reward(via_array, V_op=1.0, f_op=f_op*1e9, n_stack=16, fast=False , fast_img_save=False, size=2, scaling=False)
-                reward_arrays.append(reward_list)
-            
-                # 100개 단위로 진행상황 출력
-                if (i + 1) % 5 == 0:
-                    progress = (i + 1) / total_arrays * 100
-                    print(f"{file_unique_name}: Processed {i + 1}/{total_arrays} arrays ({progress:.1f}%)")
-                    print("time consumption during this cycle: ", time.time()-start)
+                # print(reward_arrays)
+                if i < start_index:
+                    continue
+                else:
+                    try:
+                        r, reward_list = reward(via_array, V_op=1.0, f_op=f_op*1e9, n_stack=16, fast=False, fast_img_save=False, size=2, scaling=False)
+                        reward_arrays.append(reward_list)
+                    except Exception as e:
+                        print(f"Error at iteration {i} for {file_unique_name}: {str(e)}")
+                        reward_arrays.append(reward_list_like)  # -1이 원소로 가득한 리스트 추가
+                    
+                    # 100개 단위로 진행상황 출력
+                    if (i + 1) % 20 == 0:
+                        progress = (i + 1) / total_arrays * 100
+                        print(f"{file_unique_name}: Processed {i + 1}/{total_arrays} arrays ({progress:.1f}%)")
+                        print("time consumption during this cycle: ", time.time()-start)
+                    
+                    # txt 파일에 reward_arrays를 저장
+                    reward_file_txt_name = f"{file_unique_name}"+f"_{f_op}_"+current_time+"_rewards.txt"
+                    reward_file_txt_path = os.path.join(reward_data_save_dir, reward_file_txt_name)
+                    with open(reward_file_txt_path, 'w') as f:
+                        for reward_instance in reward_arrays:
+                            f.write(str(reward_instance) + '\n')
+                    print(f"Saved rewards to {reward_file_txt_path}")
+                
+                
             # reward_arrays를 numpy 파일로 저장
-            reward_file_name = f"{file_unique_name}"+f"_{f_op}"+"_rewards.npy"
+            reward_file_name = f"{file_unique_name}"+f"_{f_op}_"+current_time+"_rewards.npy"
             reward_file_path = os.path.join(reward_data_save_dir, reward_file_name)
-            # print(reward_arrays)
+
             np.save(reward_file_path, reward_arrays)
             print(f"Saved rewards to {reward_file_path}")
+
+
 
     
